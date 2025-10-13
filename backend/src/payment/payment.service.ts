@@ -87,6 +87,13 @@ export class PaymentService {
         platformFee:
           chargeType === ChargeType.PLATFORM_COLLECTED ? 0 : platformFeeAmount,
         chargeType: chargeType,
+        // For direct charges, also store the connected account ID for webhook matching
+        ...(chargeType === ChargeType.DIRECT && {
+          metadata: {
+            connectedAccountId: business.stripeAccountId,
+            originalAmount: dto.amount.toString(),
+          } as any,
+        }),
       },
     });
 
@@ -117,6 +124,73 @@ export class PaymentService {
   async getPaymentByIntentId(paymentIntentId: string) {
     return await this.prisma.payment.findUnique({
       where: { stripePaymentIntent: paymentIntentId },
+    });
+  }
+
+  /**
+   * Find payment by connected account and amount (for direct charges)
+   */
+  async findPaymentByAccountAndAmount(
+    connectedAccountId: string,
+    amount: number
+  ) {
+    // First try to find by business with matching Stripe account ID
+    const business =
+      await this.businessService.getBusinessByStripeAccountId(
+        connectedAccountId
+      );
+
+    if (!business) {
+      return null;
+    }
+
+    // Find payment for this business with matching amount and recent timestamp
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        businessId: business.id,
+        amount: amount,
+        chargeType: "DIRECT", // Direct charges
+        status: {
+          in: [
+            "requires_payment_method",
+            "requires_confirmation",
+            "requires_action",
+          ],
+        },
+        createdAt: {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Within last 24 hours
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return payment;
+  }
+
+  /**
+   * Find payment by business ID and amount (fallback method)
+   */
+  async findPaymentByBusinessAndAmount(businessId: string, amount: number) {
+    return await this.prisma.payment.findFirst({
+      where: {
+        businessId: businessId,
+        amount: amount,
+        status: {
+          in: [
+            "requires_payment_method",
+            "requires_confirmation",
+            "requires_action",
+          ],
+        },
+        createdAt: {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Within last 24 hours
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
   }
 }

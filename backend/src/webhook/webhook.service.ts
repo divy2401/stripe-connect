@@ -19,10 +19,15 @@ export class WebhookService {
   /**
    * Verify and construct webhook event
    */
-  constructEvent(payload: Buffer, signature: string): Stripe.Event {
-    const webhookSecret = this.config.get<string>("STRIPE_WEBHOOK_SECRET");
+  constructEvent(
+    payload: Buffer,
+    signature: string,
+    webhookSecretName: string
+  ): Stripe.Event {
+    const secretKeyName = `STRIPE_WEBHOOK_SECRET_${webhookSecretName}`;
+    const webhookSecret = this.config.get<string>(secretKeyName);
     if (!webhookSecret) {
-      throw new Error("STRIPE_WEBHOOK_SECRET is not configured");
+      throw new Error(`${secretKeyName} is not configured`);
     }
 
     return this.stripe.constructWebhookEvent(payload, signature, webhookSecret);
@@ -32,7 +37,9 @@ export class WebhookService {
    * Handle webhook events
    */
   async handleEvent(event: Stripe.Event): Promise<void> {
-    this.logger.log(`Received webhook event: ${event.type}`);
+    this.logger.log(
+      `Received webhook event: ${event.type} (Account: ${event.account || "platform"})`
+    );
 
     try {
       switch (event.type) {
@@ -42,13 +49,15 @@ export class WebhookService {
 
         case "payment_intent.succeeded":
           await this.handlePaymentIntentSucceeded(
-            event.data.object as Stripe.PaymentIntent
+            event.data.object as Stripe.PaymentIntent,
+            event.account // This tells us which account the event came from
           );
           break;
 
         case "payment_intent.payment_failed":
           await this.handlePaymentIntentFailed(
-            event.data.object as Stripe.PaymentIntent
+            event.data.object as Stripe.PaymentIntent,
+            event.account // This tells us which account the event came from
           );
           break;
 
@@ -111,20 +120,49 @@ export class WebhookService {
    * Handle payment_intent.succeeded event
    */
   private async handlePaymentIntentSucceeded(
-    paymentIntent: Stripe.PaymentIntent
+    paymentIntent: Stripe.PaymentIntent,
+    accountId?: string
   ): Promise<void> {
-    this.logger.log(`Payment intent succeeded: ${paymentIntent.id}`);
+    this.logger.log(
+      `Payment intent succeeded: ${paymentIntent.id} (Account: ${accountId || "platform"})`
+    );
 
     try {
-      await this.paymentService.updatePaymentStatus(
-        paymentIntent.id,
-        "succeeded"
+      // For direct charges, the payment intent ID might be different from what we stored
+      // We need to find the payment by matching the metadata or other criteria
+      let payment = await this.paymentService.getPaymentByIntentId(
+        paymentIntent.id
       );
-      this.logger.log(
-        `Updated payment ${paymentIntent.id} status to: succeeded`
-      );
+
+      if (!payment && accountId) {
+        // This might be a direct charge - try to find by connected account and amount
+        payment = await this.paymentService.findPaymentByAccountAndAmount(
+          accountId,
+          paymentIntent.amount
+        );
+
+        // If still not found, try to find by metadata matching
+        if (!payment && paymentIntent.metadata?.businessId) {
+          payment = await this.paymentService.findPaymentByBusinessAndAmount(
+            paymentIntent.metadata.businessId,
+            paymentIntent.amount
+          );
+        }
+      }
+
+      if (payment) {
+        await this.paymentService.updatePaymentStatus(
+          payment.stripePaymentIntent,
+          "succeeded"
+        );
+        this.logger.log(
+          `Updated payment ${payment.stripePaymentIntent} status to: succeeded`
+        );
+      } else {
+        this.logger.warn(`Payment not found for intent: ${paymentIntent.id}`);
+      }
     } catch (error) {
-      this.logger.error(`Payment not found: ${paymentIntent.id}`);
+      this.logger.error(`Error updating payment status: ${error.message}`);
     }
   }
 
@@ -132,15 +170,49 @@ export class WebhookService {
    * Handle payment_intent.payment_failed event
    */
   private async handlePaymentIntentFailed(
-    paymentIntent: Stripe.PaymentIntent
+    paymentIntent: Stripe.PaymentIntent,
+    accountId?: string
   ): Promise<void> {
-    this.logger.log(`Payment intent failed: ${paymentIntent.id}`);
+    this.logger.log(
+      `Payment intent failed: ${paymentIntent.id} (Account: ${accountId || "platform"})`
+    );
 
     try {
-      await this.paymentService.updatePaymentStatus(paymentIntent.id, "failed");
-      this.logger.log(`Updated payment ${paymentIntent.id} status to: failed`);
+      // For direct charges, the payment intent ID might be different from what we stored
+      // We need to find the payment by matching the metadata or other criteria
+      let payment = await this.paymentService.getPaymentByIntentId(
+        paymentIntent.id
+      );
+
+      if (!payment && accountId) {
+        // This might be a direct charge - try to find by connected account and amount
+        payment = await this.paymentService.findPaymentByAccountAndAmount(
+          accountId,
+          paymentIntent.amount
+        );
+
+        // If still not found, try to find by metadata matching
+        if (!payment && paymentIntent.metadata?.businessId) {
+          payment = await this.paymentService.findPaymentByBusinessAndAmount(
+            paymentIntent.metadata.businessId,
+            paymentIntent.amount
+          );
+        }
+      }
+
+      if (payment) {
+        await this.paymentService.updatePaymentStatus(
+          payment.stripePaymentIntent,
+          "failed"
+        );
+        this.logger.log(
+          `Updated payment ${payment.stripePaymentIntent} status to: failed`
+        );
+      } else {
+        this.logger.warn(`Payment not found for intent: ${paymentIntent.id}`);
+      }
     } catch (error) {
-      this.logger.error(`Payment not found: ${paymentIntent.id}`);
+      this.logger.error(`Error updating payment status: ${error.message}`);
     }
   }
 

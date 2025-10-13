@@ -15,9 +15,9 @@ import { WebhookService } from "./webhook.service";
 export class WebhookController {
   constructor(private readonly webhookService: WebhookService) {}
 
-  @Post()
+  @Post("connected-account")
   @HttpCode(HttpStatus.OK)
-  async handleWebhook(
+  async handleConnectedAccountWebhook(
     @Headers("stripe-signature") signature: string,
     @Req() request: RawBodyRequest<Request>
   ) {
@@ -30,7 +30,42 @@ export class WebhookController {
       const rawBody = request.rawBody as Buffer;
 
       // Construct the event
-      const event = this.webhookService.constructEvent(rawBody, signature);
+      const event = this.webhookService.constructEvent(
+        rawBody,
+        signature,
+        "CONNECTED_ACCOUNT"
+      );
+
+      // Handle the event
+      await this.webhookService.handleEvent(event);
+
+      return { received: true };
+    } catch (error) {
+      console.error("Webhook error:", error.message);
+      throw new BadRequestException(`Webhook Error: ${error.message}`);
+    }
+  }
+
+  @Post("platform-account")
+  @HttpCode(HttpStatus.OK)
+  async handlePlatformWebhook(
+    @Headers("stripe-signature") signature: string,
+    @Req() request: RawBodyRequest<Request>
+  ) {
+    if (!signature) {
+      throw new BadRequestException("Missing stripe-signature header");
+    }
+
+    try {
+      // Get raw body (must be configured in main.ts with rawBody: true)
+      const rawBody = request.rawBody as Buffer;
+
+      // Construct the event
+      const event = this.webhookService.constructEvent(
+        rawBody,
+        signature,
+        "PLATFORM_ACCOUNT"
+      );
 
       // Handle the event
       await this.webhookService.handleEvent(event);
