@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+enum VerificationStatus {
+    PENDING
+    IN_REVIEW
+    VERIFIED
+    REJECTED
+}
+
+enum VerificationMethod {
+    CUSTOM_FORM
+    EMBEDDED_ONBOARDING
+}
+
+model Business {
+    id                  String             @id @default(uuid())
+    name                String
+    email               String             @unique
+    stripeAccountId     String             @unique @map("stripe_account_id")
+    stripeAccountStatus String             @default("pending") @map("stripe_account_status")
+    verificationStatus  VerificationStatus @default(PENDING) @map("verification_status")
+    verificationMethod  VerificationMethod @default(CUSTOM_FORM) @map("verification_method")
+    representativeInfo  Json?              @map("representative_info")
+    bankInfo            Json?              @map("bank_info")
+    createdAt           DateTime           @default(now()) @map("created_at")
+    updatedAt           DateTime           @updatedAt @map("updated_at")
+
+    @@map("businesses")
+}
+
+model Payment {
+    id                  String   @id @default(uuid())
+    businessId          String   @map("business_id")
+    stripePaymentIntent String   @unique @map("stripe_payment_intent")
+    amount              Int
+    currency            String   @default("usd")
+    status              String
+    platformFee         Int      @default(0) @map("platform_fee")
+    chargeType          String   @default("destination") @map("charge_type")
+    createdAt           DateTime @default(now()) @map("created_at")
+    updatedAt           DateTime @updatedAt @map("updated_at")
+
+    @@map("payments")
+}
+
+model Payout {
+    id               String   @id @default(uuid())
+    businessId       String   @map("business_id")
+    stripeTransferId String   @unique @map("stripe_transfer_id")
+    amount           Int
+    currency         String   @default("usd")
+    status           String
+    reason           String?
+    createdAt        DateTime @default(now()) @map("created_at")
+    updatedAt        DateTime @updatedAt @map("updated_at")
+
+    @@map("payouts")
+}
