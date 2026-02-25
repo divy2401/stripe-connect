@@ -78,6 +78,8 @@ export class StripeService {
         application_fee_amount: params.platformFeeAmount,
         // Direct charges: Payment goes directly to connected account
         on_behalf_of: params.connectedAccountId,
+
+        // setup_future_usage: "off_session", // parameter tells Stripe you intend to use this payment method for future charges without the customer being present.
       },
       {
         stripeAccount: params.connectedAccountId, // Charge directly to connected account
@@ -281,6 +283,149 @@ export class StripeService {
     });
 
     return session;
+  }
+
+  /**
+   * Add external account (bank account) to a connected account
+   */
+  async addExternalAccount(
+    accountId: string,
+    externalAccountToken: string
+  ): Promise<Stripe.BankAccount | Stripe.Card> {
+    const externalAccount = await this.stripe.accounts.createExternalAccount(
+      accountId,
+      {
+        external_account: externalAccountToken,
+      }
+    );
+
+    return externalAccount;
+  }
+
+  /**
+   * Set default external account for a connected account
+   * Note: Stripe automatically unsets the previous default when setting a new one
+   */
+  async setDefaultExternalAccount(
+    accountId: string,
+    externalAccountId: string
+  ): Promise<Stripe.BankAccount | Stripe.Card> {
+    // Stripe automatically handles unsetting the previous default
+    // when you set a new account as default
+    return await this.stripe.accounts.updateExternalAccount(
+      accountId,
+      externalAccountId,
+      {
+        default_for_currency: true,
+      }
+    );
+  }
+
+  /**
+   * Delete external account from a connected account
+   */
+  async deleteExternalAccount(
+    accountId: string,
+    externalAccountId: string
+  ): Promise<Stripe.Response<Stripe.DeletedExternalAccount>> {
+    return await this.stripe.accounts.deleteExternalAccount(
+      accountId,
+      externalAccountId
+    );
+  }
+
+  /**
+   * Get all external accounts for a connected account
+   */
+  async getExternalAccounts(
+    accountId: string
+  ): Promise<Stripe.ApiList<Stripe.BankAccount | Stripe.Card>> {
+    return await this.stripe.accounts.listExternalAccounts(accountId, {
+      limit: 100,
+    });
+  }
+
+  /**
+   * Disable automatic payouts for a connected account
+   * This prevents Stripe from automatically sending payouts daily
+   */
+  async disableAutomaticPayouts(accountId: string): Promise<Stripe.Account> {
+    return await this.stripe.accounts.update(accountId, {
+      settings: {
+        payouts: {
+          schedule: {
+            interval: "manual" as const, // Set to manual to disable automatic payouts
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Enable automatic payouts for a connected account
+   * Note: Only use this if you want Stripe to handle payouts automatically
+   */
+  async enableAutomaticPayouts(
+    accountId: string,
+    schedule: {
+      delayDays?: number;
+      interval?: "daily" | "weekly" | "monthly";
+      weeklyAnchor?: string;
+      monthlyAnchor?: number;
+    }
+  ): Promise<Stripe.Account> {
+    const payoutSchedule: any = {};
+
+    if (schedule.delayDays !== undefined) {
+      payoutSchedule.delay_days = schedule.delayDays;
+    }
+
+    if (schedule.interval) {
+      payoutSchedule.interval = schedule.interval;
+    }
+
+    if (schedule.weeklyAnchor) {
+      payoutSchedule.weekly_anchor = schedule.weeklyAnchor;
+    }
+
+    if (schedule.monthlyAnchor !== undefined) {
+      payoutSchedule.monthly_anchor = schedule.monthlyAnchor;
+    }
+
+    return await this.stripe.accounts.update(accountId, {
+      settings: {
+        payouts: {
+          schedule: payoutSchedule,
+        },
+      },
+    });
+  }
+
+  /**
+   * Create a payout to a specific bank account
+   * This is used when rotating between multiple bank accounts
+   */
+  async createPayoutToBankAccount(
+    accountId: string,
+    bankAccountId: string,
+    amount: number,
+    currency: string = "usd"
+  ): Promise<Stripe.Payout> {
+    // First, set the bank account as default temporarily
+    await this.setDefaultExternalAccount(accountId, bankAccountId);
+
+    // Create the payout (Stripe will use the default account)
+    const payout = await this.stripe.payouts.create(
+      {
+        amount,
+        currency,
+      },
+      {
+        stripeAccount: accountId,
+      }
+    );
+
+    return payout;
   }
 
   /**

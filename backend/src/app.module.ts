@@ -6,6 +6,8 @@ import { BusinessModule } from "./business/business.module";
 import { PaymentModule } from "./payment/payment.module";
 import { PayoutModule } from "./payout/payout.module";
 import { WebhookModule } from "./webhook/webhook.module";
+import { BankAccountModule } from "./bank-accounts/bank-account.module";
+import { PayoutScheduleModule } from "./payout-schedule/payout-schedule.module";
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { WebhookModule } from "./webhook/webhook.module";
     PaymentModule,
     PayoutModule,
     WebhookModule,
+    BankAccountModule,
+    PayoutScheduleModule,
   ],
 })
 export class AppModule {}

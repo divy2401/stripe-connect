@@ -168,12 +168,20 @@ export default function HomePage() {
 
                   {business.verificationStatus ===
                     VerificationStatus.VERIFIED && (
-                    <Link
-                      to={`/payment?businessId=${business.id}`}
-                      className="w-full bg-green-600 text-white text-center py-2 px-3 rounded text-sm font-medium hover:bg-green-700 transition"
-                    >
-                      Make Payment
-                    </Link>
+                    <>
+                      <Link
+                        to={`/payment?businessId=${business.id}`}
+                        className="w-full bg-green-600 text-white text-center py-2 px-3 rounded text-sm font-medium hover:bg-green-700 transition"
+                      >
+                        Make Payment
+                      </Link>
+                      <Link
+                        to={`/bank-accounts/${business.id}`}
+                        className="w-full bg-indigo-600 text-white text-center py-2 px-3 rounded text-sm font-medium hover:bg-indigo-700 transition"
+                      >
+                        Manage Bank Accounts
+                      </Link>
+                    </>
                   )}
 
                   <Link

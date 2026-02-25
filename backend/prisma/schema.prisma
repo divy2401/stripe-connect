@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+    provider  = "postgresql"
+    url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
 }
 
 enum VerificationStatus {
@@ -22,6 +23,21 @@ enum VerificationMethod {
     EMBEDDED_ONBOARDING
 }
 
+enum PayoutScheduleType {
+    DAILY
+    WEEKLY
+    MONTHLY
+    MANUAL
+    CUSTOM
+}
+
+enum PayoutRotationStrategy {
+    ROUND_ROBIN
+    ALTERNATE_MONTHLY
+    ALTERNATE_WEEKLY
+    FIXED
+}
+
 model Business {
     id                  String             @id @default(uuid())
     name                String
@@ -34,6 +50,9 @@ model Business {
     bankInfo            Json?              @map("bank_info")
     createdAt           DateTime           @default(now()) @map("created_at")
     updatedAt           DateTime           @updatedAt @map("updated_at")
+
+    bankAccounts   BankAccount[]
+    payoutSchedule PayoutSchedule?
 
     @@map("businesses")
 }
@@ -56,13 +75,62 @@ model Payment {
 model Payout {
     id               String   @id @default(uuid())
     businessId       String   @map("business_id")
+    bankAccountId    String?  @map("bank_account_id") // Track which bank account was used
     stripeTransferId String   @unique @map("stripe_transfer_id")
+    stripePayoutId   String?  @unique @map("stripe_payout_id") // For automatic payouts
     amount           Int
     currency         String   @default("usd")
     status           String
     reason           String?
+    isScheduled      Boolean  @default(false) @map("is_scheduled")
     createdAt        DateTime @default(now()) @map("created_at")
     updatedAt        DateTime @updatedAt @map("updated_at")
 
     @@map("payouts")
+}
+
+model BankAccount {
+    id                String   @id @default(cuid())
+    businessId        String   @map("business_id")
+    externalAccountId String   @unique @map("external_account_id")
+    bankName          String?  @map("bank_name")
+    last4             String
+    isDefault         Boolean  @default(false) @map("is_default")
+    currency          String   @default("usd")
+    status            String?
+    createdAt         DateTime @default(now()) @map("created_at")
+    updatedAt         DateTime @updatedAt @map("updated_at")
+
+    business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+    @@map("bank_accounts")
+}
+
+model PayoutSchedule {
+    id                 String                 @id @default(cuid())
+    businessId         String                 @unique @map("business_id")
+    scheduleType       PayoutScheduleType     @default(MANUAL) @map("schedule_type")
+    rotationStrategy   PayoutRotationStrategy @default(ROUND_ROBIN) @map("rotation_strategy")
+    isEnabled          Boolean                @default(false) @map("is_enabled")
+    autoPayoutDisabled Boolean                @default(true) @map("auto_payout_disabled")
+
+    // Schedule configuration
+    intervalDays        Int? @map("interval_days") // For CUSTOM schedule
+    specificDayOfWeek   Int? @map("specific_day_of_week") // 0-6 (Sunday-Saturday)
+    specificDayOfMonth  Int? @map("specific_day_of_month") // 1-31
+    minimumPayoutAmount Int? @default(1000) @map("minimum_payout_amount") // in cents
+
+    // Rotation tracking
+    lastUsedBankAccountId String? @map("last_used_bank_account_id")
+    rotationCounter       Int     @default(0) @map("rotation_counter")
+
+    // Metadata
+    nextPayoutDate DateTime? @map("next_payout_date")
+    lastPayoutDate DateTime? @map("last_payout_date")
+    createdAt      DateTime  @default(now()) @map("created_at")
+    updatedAt      DateTime  @updatedAt @map("updated_at")
+
+    business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+    @@map("payout_schedules")
 }

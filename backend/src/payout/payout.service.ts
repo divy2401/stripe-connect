@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { StripeService } from "../stripe/stripe.service";
 import { BusinessService } from "../business/business.service";
+import { ChargeType } from "src/payment/dto/create-payment-intent.dto";
 
 export interface PayoutRequest {
   businessId: string;
@@ -94,7 +95,8 @@ export class PayoutService {
     const payments = await this.prisma.payment.findMany({
       where: {
         businessId: business.id,
-        chargeType: "platform_collected",
+        // chargeType: "platform_collected",
+        chargeType: ChargeType.DESTINATION,
         status: "succeeded",
       },
     });

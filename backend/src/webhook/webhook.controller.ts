@@ -25,6 +25,7 @@ export class WebhookController {
       throw new BadRequestException("Missing stripe-signature header");
     }
 
+    // https://3c2d-110-227-207-99.ngrok-free.app/webhook/connected-account
     try {
       // Get raw body (must be configured in main.ts with rawBody: true)
       const rawBody = request.rawBody as Buffer;
@@ -55,6 +56,8 @@ export class WebhookController {
     if (!signature) {
       throw new BadRequestException("Missing stripe-signature header");
     }
+
+    // https://3c2d-110-227-207-99.ngrok-free.app/webhook/platform-account
 
     try {
       // Get raw body (must be configured in main.ts with rawBody: true)

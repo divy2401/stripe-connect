@@ -7,6 +7,8 @@ import VerificationStatus from "./pages/VerificationStatus";
 import EmbeddedOnboarding from "./pages/EmbeddedOnboarding";
 import DirectOnboarding from "./pages/DirectOnboarding";
 import PayoutManagement from "./pages/PayoutManagement";
+import BankAccountsPage from "./pages/BankAccounts/BankAccountsPage";
+import PayoutSchedulePage from "./pages/BankAccounts/PayoutSchedulePage";
 
 function App() {
   return (
@@ -40,6 +42,12 @@ function App() {
                 >
                   Payout Management
                 </Link>
+                <Link
+                  to="/bank-accounts"
+                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-gray-900"
+                >
+                  Bank Accounts
+                </Link>
               </div>
             </div>
           </div>
@@ -63,6 +71,14 @@ function App() {
             <Route
               path="/verification-status/:businessId"
               element={<VerificationStatus />}
+            />
+            <Route
+              path="/bank-accounts/:businessId"
+              element={<BankAccountsPage />}
+            />
+            <Route
+              path="/bank-accounts/:businessId/payout-schedule"
+              element={<PayoutSchedulePage />}
             />
           </Routes>
         </main>

@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { StripeService } from "../stripe/stripe.service";
 import { BusinessService } from "../business/business.service";
 import { PaymentService } from "../payment/payment.service";
+import { BankAccountService } from "../bank-accounts/bank-account.service";
 import Stripe from "stripe";
 
 @Injectable()
@@ -13,7 +14,8 @@ export class WebhookService {
     private readonly config: ConfigService,
     private readonly stripe: StripeService,
     private readonly businessService: BusinessService,
-    private readonly paymentService: PaymentService
+    private readonly paymentService: PaymentService,
+    private readonly bankAccountService: BankAccountService
   ) {}
 
   /**
@@ -43,27 +45,50 @@ export class WebhookService {
 
     try {
       switch (event.type) {
-        case "account.updated":
-          await this.handleAccountUpdated(event.data.object as Stripe.Account);
+        // platform account events
+        case "transfer.created": // Occurs whenever a transfer is created.
+          await this.handleTransferCreated(
+            event.data.object as Stripe.Transfer
+          );
           break;
 
-        case "payment_intent.succeeded":
+        case "payment_intent.succeeded": // Occurs when a PaymentIntent has successfully completed payment.
           await this.handlePaymentIntentSucceeded(
             event.data.object as Stripe.PaymentIntent,
             event.account // This tells us which account the event came from
           );
           break;
 
-        case "payment_intent.payment_failed":
+        case "payment_intent.payment_failed": // Occurs when a PaymentIntent has failed the attempt to create a payment method or a payment.
           await this.handlePaymentIntentFailed(
             event.data.object as Stripe.PaymentIntent,
             event.account // This tells us which account the event came from
           );
           break;
 
-        case "transfer.created":
-          await this.handleTransferCreated(
-            event.data.object as Stripe.Transfer
+        // connected account events
+        case "account.updated": // Occurs whenever an account status or property has changed
+          await this.handleAccountUpdated(event.data.object as Stripe.Account);
+          break;
+
+        case "account.external_account.created": // Occurs whenever an external account is created.
+          await this.handleExternalAccountCreated(
+            event.data.object as Stripe.BankAccount | Stripe.Card,
+            event.account
+          );
+          break;
+
+        case "account.external_account.updated": // Occurs whenever an external account is updated.
+          await this.handleExternalAccountUpdated(
+            event.data.object as Stripe.BankAccount | Stripe.Card,
+            event.account
+          );
+          break;
+
+        case "account.external_account.deleted": // Occurs whenever an external account is deleted.
+          await this.handleExternalAccountDeleted(
+            event.data.object as Stripe.BankAccount | Stripe.Card,
+            event.account
           );
           break;
 
@@ -226,5 +251,97 @@ export class WebhookService {
       `Transfer created: ${transfer.id} to account ${transfer.destination}`
     );
     // Additional logic for transfer tracking can be added here
+  }
+
+  /**
+   * Handle account.external_account.created event
+   */
+  private async handleExternalAccountCreated(
+    externalAccount: Stripe.BankAccount | Stripe.Card,
+    accountId?: string
+  ): Promise<void> {
+    this.logger.log(
+      `External account created: ${externalAccount.id} (Account: ${accountId || "platform"})`
+    );
+
+    if (!accountId) {
+      this.logger.warn("No account ID in external_account.created event");
+      return;
+    }
+
+    try {
+      const business =
+        await this.businessService.getBusinessByStripeAccountId(accountId);
+      await this.bankAccountService.syncBankAccountFromStripe(
+        accountId,
+        externalAccount.id,
+        externalAccount
+      );
+      this.logger.log(
+        `Synced bank account ${externalAccount.id} for business ${business.id}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error syncing bank account: ${error.message}`,
+        error.stack
+      );
+    }
+  }
+
+  /**
+   * Handle account.external_account.updated event
+   */
+  private async handleExternalAccountUpdated(
+    externalAccount: Stripe.BankAccount | Stripe.Card,
+    accountId?: string
+  ): Promise<void> {
+    this.logger.log(
+      `External account updated: ${externalAccount.id} (Account: ${accountId || "platform"})`
+    );
+
+    if (!accountId) {
+      this.logger.warn("No account ID in external_account.updated event");
+      return;
+    }
+
+    try {
+      await this.bankAccountService.syncBankAccountFromStripe(
+        accountId,
+        externalAccount.id,
+        externalAccount
+      );
+      this.logger.log(`Updated bank account ${externalAccount.id}`);
+    } catch (error) {
+      this.logger.error(
+        `Error updating bank account: ${error.message}`,
+        error.stack
+      );
+    }
+  }
+
+  /**
+   * Handle account.external_account.deleted event
+   */
+  private async handleExternalAccountDeleted(
+    externalAccount: Stripe.BankAccount | Stripe.Card,
+    accountId?: string
+  ): Promise<void> {
+    this.logger.log(
+      `External account deleted: ${externalAccount.id} (Account: ${accountId || "platform"})`
+    );
+
+    try {
+      await this.bankAccountService.deleteBankAccountByExternalId(
+        externalAccount.id
+      );
+      this.logger.log(
+        `Deleted bank account ${externalAccount.id} from database`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error deleting bank account: ${error.message}`,
+        error.stack
+      );
+    }
   }
 }

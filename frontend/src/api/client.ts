@@ -176,6 +176,24 @@ export interface WeeklyPayoutResult {
   results: Array<{ businessId: string; amount: number; status: string }>;
 }
 
+// Bank Account interfaces
+export interface BankAccount {
+  id: string;
+  businessId: string;
+  externalAccountId: string;
+  bankName?: string;
+  last4: string;
+  isDefault: boolean;
+  currency: string;
+  status?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AddBankAccountDto {
+  externalAccountToken: string;
+}
+
 export const businessApi = {
   createBusiness: async (data: CreateBusinessDto): Promise<Business> => {
     const response = await apiClient.post("/businesses", data);
@@ -305,6 +323,133 @@ export const payoutApi = {
 
   getPlatformBalance: async (): Promise<PlatformBalance> => {
     const response = await apiClient.get("/payout/platform-balance");
+    return response.data;
+  },
+};
+
+// Bank Account API methods
+export const bankAccountApi = {
+  addBankAccount: async (
+    businessId: string,
+    data: AddBankAccountDto
+  ): Promise<BankAccount> => {
+    const response = await apiClient.post(
+      `/businesses/${businessId}/bank-accounts`,
+      data
+    );
+    return response.data;
+  },
+
+  getBankAccounts: async (businessId: string): Promise<BankAccount[]> => {
+    const response = await apiClient.get(
+      `/businesses/${businessId}/bank-accounts`
+    );
+    return response.data;
+  },
+
+  setDefaultBankAccount: async (
+    businessId: string,
+    bankAccountId: string
+  ): Promise<BankAccount> => {
+    const response = await apiClient.patch(
+      `/businesses/${businessId}/bank-accounts/default`,
+      { bankAccountId }
+    );
+    return response.data;
+  },
+
+  removeBankAccount: async (
+    businessId: string,
+    bankAccountId: string
+  ): Promise<void> => {
+    await apiClient.delete(
+      `/businesses/${businessId}/bank-accounts/${bankAccountId}`
+    );
+  },
+};
+
+// Payout Schedule Types
+export interface PayoutSchedule {
+  id: string;
+  businessId: string;
+  scheduleType: "DAILY" | "WEEKLY" | "MONTHLY" | "MANUAL" | "CUSTOM";
+  rotationStrategy:
+    | "ROUND_ROBIN"
+    | "ALTERNATE_MONTHLY"
+    | "ALTERNATE_WEEKLY"
+    | "FIXED";
+  isEnabled: boolean;
+  autoPayoutDisabled: boolean;
+  intervalDays?: number;
+  specificDayOfWeek?: number;
+  specificDayOfMonth?: number;
+  minimumPayoutAmount?: number;
+  lastUsedBankAccountId?: string;
+  rotationCounter: number;
+  nextPayoutDate?: string;
+  lastPayoutDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePayoutScheduleDto {
+  businessId: string;
+  scheduleType: "DAILY" | "WEEKLY" | "MONTHLY" | "MANUAL" | "CUSTOM";
+  rotationStrategy:
+    | "ROUND_ROBIN"
+    | "ALTERNATE_MONTHLY"
+    | "ALTERNATE_WEEKLY"
+    | "FIXED";
+  isEnabled: boolean;
+  intervalDays?: number;
+  specificDayOfWeek?: number;
+  specificDayOfMonth?: number;
+  minimumPayoutAmount?: number;
+}
+
+export interface UpdatePayoutScheduleDto {
+  scheduleType?: "DAILY" | "WEEKLY" | "MONTHLY" | "MANUAL" | "CUSTOM";
+  rotationStrategy?:
+    | "ROUND_ROBIN"
+    | "ALTERNATE_MONTHLY"
+    | "ALTERNATE_WEEKLY"
+    | "FIXED";
+  isEnabled?: boolean;
+  intervalDays?: number;
+  specificDayOfWeek?: number;
+  specificDayOfMonth?: number;
+  minimumPayoutAmount?: number;
+}
+
+// Payout Schedule API methods
+export const payoutScheduleApi = {
+  getSchedule: async (businessId: string): Promise<PayoutSchedule | null> => {
+    const response = await apiClient.get(`/payout-schedule/${businessId}`);
+    return response.data;
+  },
+
+  createOrUpdateSchedule: async (
+    data: CreatePayoutScheduleDto
+  ): Promise<PayoutSchedule> => {
+    const response = await apiClient.post("/payout-schedule", data);
+    return response.data;
+  },
+
+  updateSchedule: async (
+    businessId: string,
+    data: UpdatePayoutScheduleDto
+  ): Promise<PayoutSchedule> => {
+    const response = await apiClient.put(
+      `/payout-schedule/${businessId}`,
+      data
+    );
+    return response.data;
+  },
+
+  processScheduledPayout: async (businessId: string): Promise<any> => {
+    const response = await apiClient.post(
+      `/payout-schedule/process/${businessId}`
+    );
     return response.data;
   },
 };
