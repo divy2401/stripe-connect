@@ -6,6 +6,67 @@ export class StripeService {
   constructor(@Inject("STRIPE_CLIENT") private readonly stripe: Stripe) {}
 
   /**
+   * Create an Express Connected Account (Stripe API only; caller persists to DB)
+   */
+  async createExpressAccount(params: {
+    email: string;
+  }): Promise<Stripe.Account> {
+    const account = await this.stripe.accounts.create({
+      type: "express",
+      email: params.email,
+      business_type: "individual",
+    });
+    return account;
+  }
+
+  /**
+   * Generate account link for Express onboarding (redirect to Stripe-hosted flow)
+   */
+  async generateExpressOnboardingLink(
+    accountId: string,
+    options: { refreshUrl: string; returnUrl: string }
+  ): Promise<Stripe.AccountLink> {
+    const accountLink = await this.stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: options.refreshUrl,
+      return_url: options.returnUrl,
+      type: "account_onboarding",
+    });
+    return accountLink;
+  }
+
+  /**
+   * Get Express account status (charges_enabled, payouts_enabled, details_submitted)
+   */
+  async getExpressAccountStatus(accountId: string): Promise<{
+    account: Stripe.Account;
+    chargesEnabled: boolean;
+    payoutsEnabled: boolean;
+    detailsSubmitted: boolean;
+    onboardingComplete: boolean;
+  }> {
+    const account = await this.stripe.accounts.retrieve(accountId);
+    const chargesEnabled = account.charges_enabled === true;
+    const payoutsEnabled = account.payouts_enabled === true;
+    const detailsSubmitted = account.details_submitted === true;
+    const onboardingComplete = chargesEnabled && payoutsEnabled;
+    return {
+      account,
+      chargesEnabled,
+      payoutsEnabled,
+      detailsSubmitted,
+      onboardingComplete,
+    };
+  }
+
+  /**
+   * Create login link for Express account dashboard
+   */
+  async createExpressLoginLink(accountId: string): Promise<Stripe.LoginLink> {
+    return await this.stripe.accounts.createLoginLink(accountId);
+  }
+
+  /**
    * Create a Custom Connected Account
    */
   async createCustomAccount(params: {

@@ -15,6 +15,30 @@ import { WebhookService } from "./webhook.service";
 export class WebhookController {
   constructor(private readonly webhookService: WebhookService) {}
 
+  @Post("stripe/webhook")
+  @HttpCode(HttpStatus.OK)
+  async handleStripeWebhook(
+    @Headers("stripe-signature") signature: string,
+    @Req() request: RawBodyRequest<Request>
+  ) {
+    if (!signature) {
+      throw new BadRequestException("Missing stripe-signature header");
+    }
+    try {
+      const rawBody = request.rawBody as Buffer;
+      const event = this.webhookService.constructEvent(
+        rawBody,
+        signature,
+        "CONNECTED_ACCOUNT"
+      );
+      await this.webhookService.handleEvent(event);
+      return { received: true };
+    } catch (error) {
+      console.error("Webhook error:", error.message);
+      throw new BadRequestException(`Webhook Error: ${error.message}`);
+    }
+  }
+
   @Post("connected-account")
   @HttpCode(HttpStatus.OK)
   async handleConnectedAccountWebhook(

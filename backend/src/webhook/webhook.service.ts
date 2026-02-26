@@ -4,6 +4,7 @@ import { StripeService } from "../stripe/stripe.service";
 import { BusinessService } from "../business/business.service";
 import { PaymentService } from "../payment/payment.service";
 import { BankAccountService } from "../bank-accounts/bank-account.service";
+import { StripeExpressService } from "../stripe-express/stripe-express.service";
 import Stripe from "stripe";
 
 @Injectable()
@@ -15,7 +16,8 @@ export class WebhookService {
     private readonly stripe: StripeService,
     private readonly businessService: BusinessService,
     private readonly paymentService: PaymentService,
-    private readonly bankAccountService: BankAccountService
+    private readonly bankAccountService: BankAccountService,
+    private readonly stripeExpressService: StripeExpressService
   ) {}
 
   /**
@@ -45,7 +47,9 @@ export class WebhookService {
 
     try {
       switch (event.type) {
-        // platform account events
+        /**
+         * Platform account events
+         */
         case "transfer.created": // Occurs whenever a transfer is created.
           await this.handleTransferCreated(
             event.data.object as Stripe.Transfer
@@ -66,9 +70,17 @@ export class WebhookService {
           );
           break;
 
-        // connected account events
+        /**
+         * Connected account events
+         */
         case "account.updated": // Occurs whenever an account status or property has changed
           await this.handleAccountUpdated(event.data.object as Stripe.Account);
+          break;
+
+        case "account.application.authorized": // Occurs when account is authorized
+          await this.handleAccountApplicationAuthorized(
+            event.account as string
+          );
           break;
 
         case "account.external_account.created": // Occurs whenever an external account is created.
@@ -110,15 +122,30 @@ export class WebhookService {
   private async handleAccountUpdated(account: Stripe.Account): Promise<void> {
     this.logger.log(`Account updated: ${account.id}`);
 
+    const expressAccount =
+      await this.stripeExpressService.findByStripeAccountId(account.id);
+
+    if (expressAccount) {
+      if (
+        account.charges_enabled === true &&
+        account.payouts_enabled === true
+      ) {
+        await this.stripeExpressService.setOnboardingCompleted(account.id);
+        this.logger.log(
+          `Express account ${account.id} onboarding marked completed`
+        );
+      }
+      return;
+    }
+
     try {
-      // Update business status
+      // Custom account: update business status
       const status = account.charges_enabled ? "active" : "pending";
       await this.businessService.updateBusinessStatus(account.id, status);
       this.logger.log(
         `Updated business account ${account.id} status to: ${status}`
       );
 
-      // Update verification status based on Stripe account requirements
       let verificationStatus = "IN_REVIEW";
 
       if (account.charges_enabled && account.payouts_enabled) {
@@ -138,6 +165,36 @@ export class WebhookService {
       );
     } catch (error) {
       this.logger.error(`Business not found for account ${account.id}`);
+    }
+  }
+
+  /**
+   * Handle account.application.authorized event (Express onboarding)
+   */
+  private async handleAccountApplicationAuthorized(
+    accountId: string
+  ): Promise<void> {
+    this.logger.log(`Account application authorized: ${accountId}`);
+
+    const expressAccount =
+      await this.stripeExpressService.findByStripeAccountId(accountId);
+    if (!expressAccount) return;
+
+    try {
+      const account = await this.stripe.getAccount(accountId);
+      if (
+        account.charges_enabled === true &&
+        account.payouts_enabled === true
+      ) {
+        await this.stripeExpressService.setOnboardingCompleted(accountId);
+        this.logger.log(
+          `Express account ${accountId} onboarding marked completed`
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error handling account.application.authorized: ${error.message}`
+      );
     }
   }
 
@@ -266,6 +323,29 @@ export class WebhookService {
 
     if (!accountId) {
       this.logger.warn("No account ID in external_account.created event");
+      return;
+    }
+
+    const expressAccount =
+      await this.stripeExpressService.findByStripeAccountId(accountId);
+
+    if (expressAccount) {
+      try {
+        const account = await this.stripe.getAccount(accountId);
+        if (
+          account.charges_enabled === true &&
+          account.payouts_enabled === true
+        ) {
+          await this.stripeExpressService.setOnboardingCompleted(accountId);
+          this.logger.log(
+            `Express account ${accountId} onboarding marked completed after external account created`
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error updating Express account after external_account.created: ${error.message}`
+        );
+      }
       return;
     }
 

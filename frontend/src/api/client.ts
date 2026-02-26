@@ -255,6 +255,60 @@ export const businessApi = {
   },
 };
 
+export interface CreateExpressAccountDto {
+  userId: number;
+  email: string;
+}
+
+export interface ExpressAccountResponse {
+  id: string;
+  userId: number;
+  stripeAccountId: string;
+  onboardingCompleted: boolean;
+}
+
+export interface ExpressAccountStatusResponse {
+  stripeAccountId: string;
+  onboardingCompleted: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+}
+
+export const stripeExpressApi = {
+  createExpressAccount: async (
+    data: CreateExpressAccountDto
+  ): Promise<ExpressAccountResponse> => {
+    const response = await apiClient.post("/stripe/express/account", data);
+    return response.data;
+  },
+
+  generateOnboardingLink: async (
+    accountId: string
+  ): Promise<{ url: string }> => {
+    const response = await apiClient.post(
+      `/stripe/express/account/${accountId}/onboarding-link`
+    );
+    return response.data;
+  },
+
+  getAccountStatus: async (
+    accountId: string
+  ): Promise<ExpressAccountStatusResponse> => {
+    const response = await apiClient.get(
+      `/stripe/express/account/${accountId}/status`
+    );
+    return response.data;
+  },
+
+  createLoginLink: async (accountId: string): Promise<{ url: string }> => {
+    const response = await apiClient.post(
+      `/stripe/express/account/${accountId}/login-link`
+    );
+    return response.data;
+  },
+};
+
 export const paymentApi = {
   createPaymentIntent: async (
     data: CreatePaymentIntentDto

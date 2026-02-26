@@ -9,6 +9,9 @@ import DirectOnboarding from "./pages/DirectOnboarding";
 import PayoutManagement from "./pages/PayoutManagement";
 import BankAccountsPage from "./pages/BankAccounts/BankAccountsPage";
 import PayoutSchedulePage from "./pages/BankAccounts/PayoutSchedulePage";
+import StripeExpressConnect from "./pages/StripeExpressConnect";
+import StripeReturn from "./pages/StripeReturn";
+import StripeRefresh from "./pages/StripeRefresh";
 
 function App() {
   return (
@@ -48,6 +51,12 @@ function App() {
                 >
                   Bank Accounts
                 </Link>
+                <Link
+                  to="/stripe-express"
+                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-gray-900"
+                >
+                  Connect (Express)
+                </Link>
               </div>
             </div>
           </div>
@@ -80,6 +89,9 @@ function App() {
               path="/bank-accounts/:businessId/payout-schedule"
               element={<PayoutSchedulePage />}
             />
+            <Route path="/stripe-express" element={<StripeExpressConnect />} />
+            <Route path="/stripe/return" element={<StripeReturn />} />
+            <Route path="/stripe/refresh" element={<StripeRefresh />} />
           </Routes>
         </main>
       </div>

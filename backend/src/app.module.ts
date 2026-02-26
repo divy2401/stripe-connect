@@ -8,6 +8,7 @@ import { PayoutModule } from "./payout/payout.module";
 import { WebhookModule } from "./webhook/webhook.module";
 import { BankAccountModule } from "./bank-accounts/bank-account.module";
 import { PayoutScheduleModule } from "./payout-schedule/payout-schedule.module";
+import { StripeExpressModule } from "./stripe-express/stripe-express.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PayoutScheduleModule } from "./payout-schedule/payout-schedule.module";
     WebhookModule,
     BankAccountModule,
     PayoutScheduleModule,
+    StripeExpressModule,
   ],
 })
 export class AppModule {}

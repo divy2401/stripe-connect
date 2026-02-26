@@ -106,6 +106,18 @@ model BankAccount {
     @@map("bank_accounts")
 }
 
+model StripeExpressAccount {
+    id                    String   @id @default(cuid())
+    userId                Int      @map("user_id")
+    email                 String
+    stripeAccountId       String   @unique @map("stripe_account_id")
+    onboardingCompleted   Boolean  @default(false) @map("onboarding_completed")
+    createdAt             DateTime @default(now()) @map("created_at")
+    updatedAt             DateTime @updatedAt @map("updated_at")
+
+    @@map("stripe_express_accounts")
+}
+
 model PayoutSchedule {
     id                 String                 @id @default(cuid())
     businessId         String                 @unique @map("business_id")
